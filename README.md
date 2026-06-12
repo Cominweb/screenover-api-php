@@ -137,6 +137,16 @@ $response = $client->get('media', array(
 ));
 ```
 
+Random ordering is also supported through the same option:
+
+```php
+$response = $client->get('media', array(
+    'order' => 'random', // translated by the SDK to sort=random
+));
+```
+
+`order=random` uses backend-native random sorting via Payload sort translation. It is not a client-side shuffle fallback.
+
 The response is the list of matching documents (array). For a single document, the
 document object is returned directly.
 

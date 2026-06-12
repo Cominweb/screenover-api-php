@@ -155,6 +155,10 @@ class OptionParser
             }
             [$field, $direction] = array_pad(explode(':', $clause), 2, 'ASC');
             $field = $this->mapField($this->stripModel(trim($field)));
+            if (strcasecmp($field, 'random') === 0) {
+                $parts[] = 'random';
+                continue;
+            }
             $prefix = strtoupper(trim($direction)) === 'DESC' ? '-' : '';
             $parts[] = $prefix . $field;
         }

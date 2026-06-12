@@ -22,6 +22,7 @@ $p = new OptionParser();
 check('where', urldecode($p->build(['where'=>'title%%test;created<2014-11-12'])),
     'where[and][0][title][like]=test&where[and][1][createdAt][less_than]=2014-11-12');
 check('order', urldecode($p->build(['order'=>'created:DESC,title'])), 'sort=-createdAt,title');
+check('order random', urldecode($p->build(['order'=>'random'])), 'sort=random');
 check('fields', urldecode($p->build(['fields'=>'Media.id,Media.title'])), 'select[id]=true&select[title]=true');
 check('recursive', $p->build(['recursive'=>-1]), 'depth=0');
 check('limit offset', urldecode($p->build(['limit'=>'50,25'])), 'limit=25&page=3');

@@ -37,6 +37,14 @@ test('order: created:DESC -> sort=-createdAt, asc default', function () use ($p)
     assertSame('sort=-createdAt,title', urldecode($p->build(['order' => 'created:DESC,title'])));
 });
 
+test('order: random -> sort=random', function () use ($p) {
+    assertSame('sort=random', urldecode($p->build(['order' => 'random'])));
+});
+
+test('order: random mixed with regular clauses preserves all items', function () use ($p) {
+    assertSame('sort=random,-createdAt', urldecode($p->build(['order' => 'random,created:DESC'])));
+});
+
 test('order: native sort passthrough wins', function () use ($p) {
     assertSame('sort=-title', urldecode($p->build(['sort' => '-title'])));
 });

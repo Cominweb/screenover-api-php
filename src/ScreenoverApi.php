@@ -335,6 +335,8 @@ class ScreenoverApi
 
         // An id in the path means a single-document read: no project scoping.
         $isSingleDocument = (bool) preg_match('#^/?\w[\w-]*/.+$#', $resource);
+        if (is_array($options) && !$isSingleDocument) {
+            $options = $this->injectProjectFilter($resource, $options, $allProjects);
         }
 
         $queryString = is_array($options) ? $this->optionParser->build($options) : '';

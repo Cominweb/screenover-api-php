@@ -180,6 +180,17 @@ test('get with Mediative options builds a translated query string', function () 
     assertStringContains('limit=25', $url);
 });
 
+test('get with random order builds sort=random', function () {
+    $api = new ScreenoverApi('id', 'KEY', 'demo.screenover.tv');
+    $fake = FakeClient::into($api);
+    $fake->enqueue(['docs' => []]);
+
+    $api->get('media', ['order' => 'random']);
+
+    $url = urldecode($fake->lastCall()['url']);
+    assertStringContains('sort=random', $url);
+});
+
 test('get with $shortCut=false returns the raw envelope', function () {
     $api = new ScreenoverApi('id', 'KEY', 'demo.screenover.tv');
     $fake = FakeClient::into($api);
