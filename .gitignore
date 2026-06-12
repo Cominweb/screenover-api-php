@@ -1,0 +1,49 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Composer
+/vendor/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+
+# Cache
+.cache/
+tmp/
+temp/
+
+# PHPUnit
+.phpunit.result.cache
+
+# Coverage
+coverage/
+.clover.xml
+
+# Build / archives
+dist/
+build/
+*.zip
+*.tar
+*.tar.gz
+
+# OS generated files
+Thumbs.db
+
+# Local runtime files
+*.pid
+
+# Composer PHAR
+composer.phar
