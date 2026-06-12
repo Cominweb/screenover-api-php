@@ -311,18 +311,32 @@ class ScreenoverApi
     /**
      * GET a resource.
      *
-     *   get('media')                    -> list
-     *   get('media', $id)               -> single document
-     *   get('media', ['id' => $id])     -> single document
-     *   get('media', [...options])      -> filtered list (where/order/fields/limit...)
+     *   get('media')                       -> list (scoped to the active project)
+     *   get('media', $id)                  -> single document (never scoped)
+     *   get('media', ['id' => $id])        -> single document (never scoped)
+     *   get('media', [...options])         -> filtered list (where/order/fields/limit...)
+     *   get('media', [], true, true, true) -> unscoped list (multi-project opt-out)
      *
-     * @param string               $resource Collection slug (optionally with /id appended).
+     * @param string                         $resource    Collection slug (optionally with /id appended).
      * @param array<string,mixed>|string|int $options
+     * @param bool                           $autoMap     Auto-extract the id from $options.
+     * @param bool                           $shortCut    Normalise the { doc/docs } envelope.
+     * @param bool                           $allProjects Opt-out: do NOT filter by the active project.
      * @return array<string,mixed>|array<int,mixed>
      */
-    public function get(string $resource, $options = [], bool $autoMap = true, bool $shortCut = true)
-    {
+    public function get(
+        string $resource,
+        $options = [],
+        bool $autoMap = true,
+        bool $shortCut = true,
+        bool $allProjects = false
+    ) {
         $resource = $this->extractId($resource, $options, $autoMap);
+
+        // An id in the path means a single-document read: no project scoping.
+        $isSingleDocument = (bool) preg_match('#^/?\w[\w-]*/.+$#', $resource);
+        }
+
         $queryString = is_array($options) ? $this->optionParser->build($options) : '';
         $response = $this->http->request('GET', $this->url($resource, $queryString));
 
@@ -528,6 +542,36 @@ class ScreenoverApi
             $datas['project'] = $this->project;
         }
         return $datas;
+    }
+
+    /**
+     * Inject the active-project filter into the read options for project-scoped collections.
+     *
+     * Mirrors injectProject() (used on creation) for reads. Skipped when:
+     *   - the caller opted out ($allProjects = true),
+     *   - no project is currently active,
+     *   - the collection is not project-scoped.
+     *
+     * The condition is forwarded to the OptionParser as an extra "AND" so it never
+     * clobbers a user-supplied where.
+     *
+     * @param array<string,mixed> $options
+     * @return array<string,mixed>
+     */
+    private function injectProjectFilter(string $resource, array $options, bool $allProjects): array
+    {
+        if ($allProjects || $this->project === null) {
+            return $options;
+        }
+
+        $slug = strtok(ltrim($resource, '/'), '/?');
+        if (!in_array($slug, self::PROJECT_SCOPED, true)) {
+            return $options;
+        }
+
+        $options['_projectFilter'] = ['project' => ['equals' => $this->project]];
+
+        return $options;
     }
 
     /**
