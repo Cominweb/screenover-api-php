@@ -2,6 +2,8 @@
 
 namespace Screenover\Api\Query;
 
+use Screenover\Api\Exception\UnsupportedFilterException;
+
 /**
  * Translates the legacy Mediative query options into a PayloadCMS REST query string.
  *
@@ -31,10 +33,12 @@ class OptionParser
         '>' => 'greater_than',
         '<' => 'less_than',
         '=' => 'equals',
+        ':' => 'equals', // legacy Mediative "field:value" (id:, category:, Category.id:)
     ];
 
     /**
-     * Known field renames between Mediative and ScreenOver/PayloadCMS.
+     * Known field/relation renames between Mediative and ScreenOver/PayloadCMS.
+     * Keys are looked up case-insensitively (see resolveField()).
      *
      * @var array<string,string>
      */
@@ -42,6 +46,10 @@ class OptionParser
         'created' => 'createdAt',
         'modified' => 'updatedAt',
         'updated' => 'updatedAt',
+        'id' => 'id',
+        // Media -> category relation goes through the "categories" join (category-media).
+        'category' => 'categories.category',
+        'category.id' => 'categories.category',
     ];
 
     /**
@@ -117,18 +125,28 @@ class OptionParser
         $conditions = array_filter(array_map('trim', explode(';', (string) $options['where'])), 'strlen');
         $index = 0;
         foreach ($conditions as $condition) {
+            $matched = false;
             foreach (self::OPERATORS as $symbol => $operator) {
                 $pos = strpos($condition, $symbol);
                 if ($pos === false) {
                     continue;
                 }
 
-                $field = $this->mapField($this->stripModel(trim(substr($condition, 0, $pos))));
+                $field = $this->resolveField(substr($condition, 0, $pos));
                 $value = trim(substr($condition, $pos + strlen($symbol)));
 
                 $query['where']['and'][$index][$field][$operator] = $value;
                 $index++;
+                $matched = true;
                 break;
+            }
+
+            if (!$matched) {
+                throw new UnsupportedFilterException(sprintf(
+                    'Unsupported legacy filter "%s": no recognised operator (expected one of %s).',
+                    $condition,
+                    implode(', ', array_keys(self::OPERATORS))
+                ));
             }
         }
     }
@@ -154,7 +172,7 @@ class OptionParser
                 continue;
             }
             [$field, $direction] = array_pad(explode(':', $clause), 2, 'ASC');
-            $field = $this->mapField($this->stripModel(trim($field)));
+            $field = $this->resolveField($field);
             $prefix = strtoupper(trim($direction)) === 'DESC' ? '-' : '';
             $parts[] = $prefix . $field;
         }
@@ -179,7 +197,7 @@ class OptionParser
         }
 
         foreach (explode(',', (string) $options['fields']) as $field) {
-            $field = $this->mapField($this->stripModel(trim($field)));
+            $field = $this->resolveField($field);
             if ($field !== '') {
                 $query['select'][$field] = 'true';
             }
@@ -243,19 +261,33 @@ class OptionParser
     }
 
     /**
+     * Translate a legacy field reference (with an optional "Model." prefix) into the
+     * matching ScreenOver field/relation.
+     *
+     * Resolution order:
+     *   - direct lookup on the full token (e.g. "Category.id" => "categories.category");
+     *   - otherwise drop the "Model." prefix and retry the lookup
+     *     (e.g. "Media.id" => "id", "Media.title" => "title").
+     */
+    private function resolveField(string $field): string
+    {
+        $field = trim($field);
+
+        if (isset(self::FIELD_MAP[strtolower($field)])) {
+            return self::FIELD_MAP[strtolower($field)];
+        }
+
+        $stripped = $this->stripModel($field);
+
+        return self::FIELD_MAP[strtolower($stripped)] ?? $stripped;
+    }
+
+    /**
      * Remove a "Model." prefix from a field reference (e.g. "Media.title" => "title").
      */
     private function stripModel(string $field): string
     {
         $dot = strrpos($field, '.');
         return $dot === false ? $field : substr($field, $dot + 1);
-    }
-
-    /**
-     * Apply known Mediative => PayloadCMS field renames.
-     */
-    private function mapField(string $field): string
-    {
-        return self::FIELD_MAP[$field] ?? $field;
     }
 }
