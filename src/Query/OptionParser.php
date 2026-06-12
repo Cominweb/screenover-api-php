@@ -49,6 +49,10 @@ class OptionParser
      */
     public function build(array $options): string
     {
+        // Project-scope condition injected by ScreenoverApi (internal key).
+        $projectFilter = $options['_projectFilter'] ?? null;
+        unset($options['_projectFilter']);
+
         $query = [];
 
         $this->applyWhere($options, $query);
@@ -58,11 +62,40 @@ class OptionParser
         $this->applyLimit($options, $query);
         $this->applyPassThrough($options, $query);
 
+        if (is_array($projectFilter)) {
+            $this->applyProjectFilter($projectFilter, $query);
+        }
+
         if ($query === []) {
             return '';
         }
 
         return http_build_query($query);
+    }
+
+    /**
+     * Merge the project-scope condition into the where clause as an additional AND,
+     * normalising whatever shape the user-supplied where already has.
+     *
+     * @param array<string,mixed> $condition e.g. ['project' => ['equals' => 'pid-1']]
+     * @param array<string,mixed> $query
+     */
+    private function applyProjectFilter(array $condition, array &$query): void
+    {
+        if (!isset($query['where'])) {
+            $query['where']['and'][] = $condition;
+            return;
+        }
+
+        // applyWhere (string Mediative) already produced a where[and][...]: just append.
+        if (isset($query['where']['and']) && is_array($query['where']['and'])) {
+            $query['where']['and'][] = $condition;
+            return;
+        }
+
+        // Plain native PayloadCMS where: combine it with the project scope in an AND.
+        $existing = $query['where'];
+        $query['where'] = ['and' => [$existing, $condition]];
     }
 
     /**

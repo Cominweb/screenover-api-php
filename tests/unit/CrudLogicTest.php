@@ -188,6 +188,105 @@ test('get with $shortCut=false returns the raw envelope', function () {
     assertArrayHasKey('totalDocs', $raw);
 });
 
+section('GET project scoping (multi-tenant)');
+
+test('get(scoped) injects the active-project filter into the query', function () {
+    $api = new ScreenoverApi('id', 'KEY', 'demo.screenover.tv');
+    $fake = FakeClient::into($api);
+    $api->setProject('A');
+    $fake->enqueue(['docs' => [['id' => '1']]]);
+
+    $api->get('media');
+
+    $url = urldecode($fake->lastCall()['url']);
+    assertStringContains('where[and][0][project][equals]=A', $url);
+});
+
+test('get(scoped, $id) by id is NOT filtered by project', function () {
+    $api = new ScreenoverApi('id', 'KEY', 'demo.screenover.tv');
+    $fake = FakeClient::into($api);
+    $api->setProject('A');
+    $uuid = '11111111-2222-3333-4444-555555555555';
+    $fake->enqueue(['doc' => ['id' => $uuid]]);
+
+    $api->get('media', $uuid);
+
+    $url = $fake->lastCall()['url'];
+    assertSame('https://demo.screenover.tv/api/media/' . $uuid, $url);
+    assertFalse(strpos($url, 'project') !== false, 'no project filter on a by-id read');
+});
+
+test('get("media/ID") inline id is NOT filtered by project', function () {
+    $api = new ScreenoverApi('id', 'KEY', 'demo.screenover.tv');
+    $fake = FakeClient::into($api);
+    $api->setProject('A');
+    $fake->enqueue(['doc' => ['id' => '7']]);
+
+    $api->get('media/7');
+
+    assertFalse(strpos($fake->lastCall()['url'], 'project') !== false);
+});
+
+test('get(non-scoped) is NOT filtered by project', function () {
+    $api = new ScreenoverApi('id', 'KEY', 'demo.screenover.tv');
+    $fake = FakeClient::into($api);
+    $api->setProject('A');
+    $fake->enqueue(['docs' => []]);
+
+    $api->get('projects');
+
+    assertFalse(strpos($fake->lastCall()['url'], 'project%5B') !== false, 'projects must not be scoped');
+});
+
+test('get(scoped) without an active project is NOT filtered', function () {
+    $api = new ScreenoverApi('id', 'KEY', 'demo.screenover.tv');
+    $fake = FakeClient::into($api);
+    $fake->enqueue(['docs' => []]);
+
+    $api->get('media');
+
+    assertFalse(strpos($fake->lastCall()['url'], 'project') !== false);
+});
+
+test('get(scoped, $allProjects=true) opts out of the project filter', function () {
+    $api = new ScreenoverApi('id', 'KEY', 'demo.screenover.tv');
+    $fake = FakeClient::into($api);
+    $api->setProject('A');
+    $fake->enqueue(['docs' => []]);
+
+    $api->get('media', [], true, true, true); // $allProjects = true
+
+    assertFalse(strpos($fake->lastCall()['url'], 'project') !== false);
+});
+
+test('get(scoped) keeps a user-supplied where AND adds the project filter', function () {
+    $api = new ScreenoverApi('id', 'KEY', 'demo.screenover.tv');
+    $fake = FakeClient::into($api);
+    $api->setProject('A');
+    $fake->enqueue(['docs' => []]);
+
+    $api->get('media', ['where' => 'title%%test']);
+
+    $url = urldecode($fake->lastCall()['url']);
+    assertStringContains('where[and][0][title][like]=test', $url);
+    assertStringContains('where[and][1][project][equals]=A', $url);
+});
+
+test('two projects do not leak: get(media) after setProject(B) targets B only', function () {
+    $api = new ScreenoverApi('id', 'KEY', 'demo.screenover.tv');
+    $fake = FakeClient::into($api);
+
+    $api->setProject('A');
+    $fake->enqueue(['docs' => [['id' => 'a1']]]);
+    $api->get('media');
+    assertStringContains('project%5D%5Bequals%5D=A', $fake->lastCall()['url']);
+
+    $api->setProject('B');
+    $fake->enqueue(['docs' => [['id' => 'b1']]]);
+    $api->get('media');
+    assertStringContains('project%5D%5Bequals%5D=B', $fake->lastCall()['url']);
+});
+
 section('POST');
 
 test('post(resource, datas) creates and returns the document', function () {
