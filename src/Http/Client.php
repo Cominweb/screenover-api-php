@@ -79,7 +79,12 @@ class Client
         ];
 
         if ($body !== null) {
-            $options[CURLOPT_POSTFIELDS] = json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            $encoded = json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            if ($encoded === false) {
+                curl_close($ch);
+                throw new ApiException('Unable to encode request body as JSON: ' . json_last_error_msg());
+            }
+            $options[CURLOPT_POSTFIELDS] = $encoded;
         }
 
         curl_setopt_array($ch, $options);
@@ -87,9 +92,7 @@ class Client
         $raw = curl_exec($ch);
         $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $transportError = curl_error($ch);
-        if (PHP_VERSION_ID < 80000) {
-            curl_close($ch);
-        }
+        curl_close($ch);
         unset($ch);
 
         if ($raw === false) {
@@ -121,6 +124,12 @@ class Client
             throw new ApiException('Unable to open file for upload: ' . $filePath);
         }
 
+        $size = filesize($filePath);
+        if ($size === false) {
+            fclose($handle);
+            throw new ApiException('Unable to determine file size for upload: ' . $filePath);
+        }
+
         $ch = curl_init($url);
         if ($ch === false) {
             fclose($handle);
@@ -131,7 +140,7 @@ class Client
             CURLOPT_CUSTOMREQUEST => 'PUT',
             CURLOPT_UPLOAD => true,
             CURLOPT_INFILE => $handle,
-            CURLOPT_INFILESIZE => filesize($filePath),
+            CURLOPT_INFILESIZE => $size,
             CURLOPT_HTTPHEADER => ['Content-Type: ' . $contentType],
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_SSL_VERIFYPEER => $this->secure,
@@ -141,9 +150,7 @@ class Client
         $raw = curl_exec($ch);
         $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $transportError = curl_error($ch);
-        if (PHP_VERSION_ID < 80000) {
-            curl_close($ch);
-        }
+        curl_close($ch);
         unset($ch);
         fclose($handle);
 
