@@ -143,6 +143,48 @@ test('get(resource) lists documents from {docs}', function () {
     assertSame('https://demo.screenover.tv/api/media', $call['url']);
 });
 
+test('get(resource) keeps legacy docs return and exposes pagination metadata', function () {
+    $api = new ScreenoverApi('id', 'KEY', 'demo.screenover.tv');
+    $fake = FakeClient::into($api);
+    $fake->enqueue([
+        'docs' => [['id' => '1'], ['id' => '2']],
+        'totalDocs' => 10,
+        'totalPages' => 5,
+        'page' => 1,
+        'limit' => 2,
+        'hasNextPage' => true,
+        'hasPrevPage' => false,
+    ]);
+
+    $list = $api->get('media');
+
+    assertSame([['id' => '1'], ['id' => '2']], $list);
+    assertSame(10, $api->getTotalDocs());
+    assertSame(5, $api->getTotalPages());
+    assertSame([
+        'totalDocs' => 10,
+        'totalPages' => 5,
+        'page' => 1,
+        'limit' => 2,
+        'hasNextPage' => true,
+        'hasPrevPage' => false,
+    ], $api->getPagination());
+});
+
+test('pagination metadata is cleared after a non-list response', function () {
+    $api = new ScreenoverApi('id', 'KEY', 'demo.screenover.tv');
+    $fake = FakeClient::into($api);
+    $fake->enqueue(['docs' => [['id' => '1']], 'totalDocs' => 1, 'totalPages' => 1]);
+    $api->get('media');
+
+    $fake->enqueue(['doc' => ['id' => '42']]);
+    $api->get('media', '42');
+
+    assertSame(null, $api->getPagination());
+    assertSame(null, $api->getTotalDocs());
+    assertSame(null, $api->getTotalPages());
+});
+
 test('get(resource, $uuid) appends the id to the path', function () {
     $api = new ScreenoverApi('id', 'KEY', 'demo.screenover.tv');
     $fake = FakeClient::into($api);

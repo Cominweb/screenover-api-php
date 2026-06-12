@@ -77,6 +77,9 @@ class ScreenoverApi
 
     protected OptionParser $optionParser;
 
+    /** @var array<string,mixed>|null */
+    protected ?array $lastPagination = null;
+
     public function __construct(string $public, string $secret, string $domain = self::DEFAULT_DOMAIN)
     {
         $this->setPublic($public);
@@ -254,6 +257,34 @@ class ScreenoverApi
     public function getHttpClient(): Client
     {
         return $this->http;
+    }
+
+    /**
+     * Return pagination metadata from the last list response ({ docs } envelope).
+     *
+     * @return array<string,mixed>|null
+     */
+    public function getPagination(): ?array
+    {
+        return $this->lastPagination;
+    }
+
+    public function getTotalDocs(): ?int
+    {
+        if (!isset($this->lastPagination['totalDocs'])) {
+            return null;
+        }
+
+        return (int) $this->lastPagination['totalDocs'];
+    }
+
+    public function getTotalPages(): ?int
+    {
+        if (!isset($this->lastPagination['totalPages'])) {
+            return null;
+        }
+
+        return (int) $this->lastPagination['totalPages'];
     }
 
     // ---------------------------------------------------------------------
@@ -584,6 +615,8 @@ class ScreenoverApi
      */
     private function normalize(array $response, bool $shortCut)
     {
+        $this->rememberPagination($response);
+
         if (!$shortCut) {
             return $response;
         }
@@ -594,5 +627,27 @@ class ScreenoverApi
             return $response['docs'];
         }
         return $response;
+    }
+
+    /**
+     * Store pagination fields from list responses only; clear otherwise.
+     *
+     * @param array<string,mixed> $response
+     */
+    private function rememberPagination(array $response): void
+    {
+        if (!array_key_exists('docs', $response) || !is_array($response['docs'])) {
+            $this->lastPagination = null;
+            return;
+        }
+
+        $this->lastPagination = array_filter([
+            'totalDocs' => $response['totalDocs'] ?? null,
+            'totalPages' => $response['totalPages'] ?? null,
+            'page' => $response['page'] ?? null,
+            'limit' => $response['limit'] ?? null,
+            'hasNextPage' => $response['hasNextPage'] ?? null,
+            'hasPrevPage' => $response['hasPrevPage'] ?? null,
+        ], static fn ($value): bool => $value !== null);
     }
 }
