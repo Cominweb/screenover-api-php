@@ -17,6 +17,9 @@ Contents
 
 - [What changes (and what does not)](#what-changes-and-what-does-not)
 - [Step-by-step](#step-by-step)
+- [Field & relation mapping](#field--relation-mapping)
+- [Video & thumbnail URLs](#video--thumbnail-urls)
+- [Pagination](#pagination)
 - [Quick reference](#quick-reference)
 - [Before / after: a full script](#before--after-a-full-script)
 - [Troubleshooting](#troubleshooting)
@@ -178,6 +181,200 @@ $client->get('media', [
 ]);
 ```
 
+Field & relation mapping
+------------------------
+
+### Scalar fields
+
+| Mediative field | ScreenOver / PayloadCMS field | Notes |
+|---|---|---|
+| `id` | `id` | Now a UUID string, not an integer |
+| `title` | `title` | Unchanged |
+| `created` | `createdAt` | ISO 8601 timestamp |
+| `modified` / `updated` | `updatedAt` | ISO 8601 timestamp |
+| `type` | `source.type` | Moved into the `source` object |
+| `license` | *(removed)* | No equivalent; use tags/styles instead |
+| `importSourceKey` | `importSourceKey` | **Original Mediative integer id** — use to map legacy ids to new UUIDs |
+| `importSourceData` | `importSourceData` | Full original Mediative payload stored as JSON — use to access any field from the import |
+
+> **Tracing legacy ids:** every record imported from Mediative keeps its original integer id in
+> `importSourceKey` and the full source payload in `importSourceData`. You can therefore look up
+> any imported media by its old id:
+>
+> ```php
+> $media = $client->get('media', ['where' => 'importSourceKey=12345']);
+> echo $media['id']; // the new UUID
+> ```
+
+### Relations
+
+| Mediative relation | ScreenOver / PayloadCMS | Notes |
+|---|---|---|
+| `Category` (flat field `category_id`) | `categories[].category` | Stored as a join collection `category-media`; each entry has a `category` relation field pointing to the category document |
+| `Tag` | `tags[]` | Direct relation array on the media document |
+| `Style` | `styles[]` | Direct relation array on the media document |
+
+#### Reading categories
+
+Because categories are stored through the `category-media` join table, the `categories` array on each media document contains join records, not category documents directly:
+
+```php
+// depth=1 (or recursive=1) is required to populate the relations
+$media = $client->get('media', ['where' => 'id=<uuid>', 'recursive' => 1]);
+
+foreach ($media['categories'] as $entry) {
+    $category = $entry['category']; // populated category document (array)
+    echo $category['id'] . ': ' . $category['title'] . "\n";
+}
+```
+
+#### Filtering by category
+
+Both legacy and native forms are accepted:
+
+```php
+// legacy Mediative filter (colon operator, resolved automatically)
+$client->get('media', ['where' => 'category:<category-uuid>']);
+$client->get('media', ['where' => 'Category.id:<category-uuid>']);
+
+// native PayloadCMS filter (array form)
+$client->get('media', ['where' => ['categories.category' => ['equals' => '<category-uuid>']]]);
+```
+
+### Project scoping
+
+The following collections are automatically scoped to the active project on both reads and writes:
+
+`media`, `category`, `category-media`, `tags`, `styles`, `media-watch`, `media-watch-result`
+
+No extra `where` condition is needed — the SDK injects the project filter transparently. To
+opt-out and query across all projects, pass `true` as the fifth argument to `get()`:
+
+```php
+$client->get('media', [], true, true, true); // allProjects = true
+```
+
+### Query field aliases
+
+The SDK resolves legacy field names (including `Model.` prefixes) automatically in `where`,
+`order`, and `fields` options:
+
+| Mediative token | Resolved ScreenOver field |
+|---|---|
+| `created` / `Media.created` | `createdAt` |
+| `modified` / `updated` | `updatedAt` |
+| `id` / `Media.id` | `id` |
+| `category` / `Category.id` | `categories.category` |
+| `Media.<field>` (any other) | `<field>` (prefix stripped) |
+
+If a legacy `where` condition uses an unrecognised operator, the SDK throws
+`Screenover\Api\Exception\UnsupportedFilterException` instead of silently dropping the filter.
+
+Video & thumbnail URLs
+----------------------
+
+### Source types
+
+Each media document has a `source` object with at least a `type` field. The `url` field is
+present for all externally-hosted types:
+
+| `source.type` | Where the video lives | `source.url` value |
+|---|---|---|
+| `youtube` | YouTube platform | The full YouTube URL (e.g. `https://youtu.be/xxxx`) |
+| `vimeo` | Vimeo platform | The full Vimeo URL (e.g. `https://vimeo.com/xxxx`) |
+| `dailymotion` | Dailymotion platform | The full Dailymotion URL |
+| `upload` | Google Cloud Storage | GCS public/signed URL to the video file (set by the API after upload) |
+| `hls` | External HLS stream | The `.m3u8` manifest URL |
+
+### Reading the video URL
+
+```php
+$media = $client->get('media', $id);
+
+$type = $media['source']['type'];   // 'youtube', 'vimeo', 'upload', …
+$url  = $media['source']['url'];    // playback URL for all types
+
+// Embed examples per type:
+switch ($type) {
+    case 'youtube':
+        // extract video id from url, e.g. https://www.youtube.com/embed/{id}
+        preg_match('/(?:youtu\.be\/|[?&]v=)([A-Za-z0-9_-]{11})/', $url, $m);
+        $embedUrl = 'https://www.youtube.com/embed/' . $m[1];
+        break;
+    case 'vimeo':
+        preg_match('#vimeo\.com/(\d+)#', $url, $m);
+        $embedUrl = 'https://player.vimeo.com/video/' . $m[1];
+        break;
+    case 'dailymotion':
+        preg_match('#(?:dai\.ly|dailymotion\.com/video)/([A-Za-z0-9]+)#', $url, $m);
+        $embedUrl = 'https://www.dailymotion.com/embed/video/' . $m[1];
+        break;
+    case 'upload':
+    case 'hls':
+        $embedUrl = $url; // direct file / manifest URL
+        break;
+}
+```
+
+### Thumbnail URLs
+
+Thumbnails are stored under the `thumbnail` key of the media document. For uploaded files the
+thumbnail is computed during the finalisation step of `uploadMedia()` and returned by the API.
+
+```php
+$media = $client->get('media', $id);
+
+// preferred thumbnail (API-resolved, works for all source types)
+$thumb = $media['thumbnail']['url'] ?? null;
+
+// fallback: build a YouTube/Vimeo thumbnail from the source URL yourself
+if ($thumb === null && $media['source']['type'] === 'youtube') {
+    preg_match('/(?:youtu\.be\/|[?&]v=)([A-Za-z0-9_-]{11})/', $media['source']['url'], $m);
+    $thumb = 'https://img.youtube.com/vi/' . $m[1] . '/hqdefault.jpg';
+}
+```
+
+> The `thumbnail` object may include additional sizes (`small`, `medium`, `large`) depending on
+> your ScreenOver plan. Inspect `$media['thumbnail']` to see what is available.
+
+Pagination
+----------
+
+`get()` on a collection returns a list. After each list call you can retrieve the pagination
+metadata without any extra request:
+
+```php
+$medias = $client->get('media', ['limit' => 25, 'page' => 2]);
+
+$pagination  = $client->getPagination();  // full PayloadCMS envelope
+$totalDocs   = $client->getTotalDocs();   // (int) total matching documents
+$totalPages  = $client->getTotalPages();  // (int) total pages for the current limit
+
+echo "Page 2 of $totalPages ($totalDocs total media)\n";
+foreach ($medias as $m) {
+    echo $m['title'] . "\n";
+}
+```
+
+Available pagination keys (`getPagination()` returns all of them when present):
+
+| Key | Type | Description |
+|---|---|---|
+| `totalDocs` | int | Total number of documents matching the query |
+| `totalPages` | int | Total number of pages |
+| `page` | int | Current page number |
+| `limit` | int | Page size used |
+| `hasNextPage` | bool | `true` when a next page exists |
+| `hasPrevPage` | bool | `true` when a previous page exists |
+
+#### Random ordering
+
+Pass `random` as the order value to retrieve a random selection:
+
+```php
+$randomMedias = $client->get('media', ['order' => 'random', 'limit' => 5]);
+```
+
 Quick reference
 ---------------
 
@@ -188,10 +385,17 @@ Quick reference
 | resource `medias` | resource `media` |
 | `$response->Media` / `$response[0]->Media->id` | returned document/array directly (`$response['id']`) |
 | integer ids | UUID ids |
-| `where` `%%`, `<`, `>`, `;` | same syntax, translated to PayloadCMS operators |
+| `where` `%%`, `<`, `>`, `=`, `;` | same syntax, translated to PayloadCMS operators |
+| `id:xxx` / `category:xxx` / `Category.id:xxx` | legacy colon filters, resolved automatically |
+| `created` field | `createdAt` field (mapped automatically) |
+| `category_id` / Category relation | `categories[].category` (join collection) |
+| Tag / Style relations | `tags[]` / `styles[]` (direct relations) |
 | update via `PUT` | `put()` (sent as `PATCH`) |
 | `domain` scoping | `setProject()` scoping |
-| single-step media add | `uploadMedia()` for files / `post()` for youtube/vimeo |
+| single-step media add | `uploadMedia()` for files / `post()` for youtube/vimeo/dailymotion/hls |
+| *(no pagination metadata)* | `getPagination()` / `getTotalDocs()` / `getTotalPages()` after each list |
+| *(silent unknown filter)* | throws `UnsupportedFilterException` |
+| original integer id | `importSourceKey` / `importSourceData` on every migrated document |
 
 Before / after: a full script
 ------------------------------
