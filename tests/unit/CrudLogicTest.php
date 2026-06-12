@@ -235,7 +235,7 @@ test('get(non-scoped) is NOT filtered by project', function () {
 
     $api->get('projects');
 
-    assertFalse(strpos($fake->lastCall()['url'], 'project%5B') !== false, 'projects must not be scoped');
+    assertFalse(strpos($fake->lastCall()['url'], '%5Bproject%5D') !== false, 'projects must not be scoped');
 });
 
 test('get(scoped) without an active project is NOT filtered', function () {
