@@ -153,6 +153,22 @@ If a legacy condition is not recognised, the SDK throws
 The response is the list of matching documents (array). For a single document, the
 document object is returned directly.
 
+To keep backward compatibility, `get()` returns the plain docs list by default. After a
+list request, pagination metadata is available through dedicated helpers:
+
+```php
+$list = $client->get('media', array('limit' => '0,25'));
+echo $client->getTotalDocs();
+echo $client->getTotalPages();
+var_dump($client->getPagination()); // totalDocs, totalPages, page, limit, hasNextPage, hasPrevPage
+```
+
+If you need the full Payload response envelope in one call, disable shortcut mode:
+
+```php
+$raw = $client->get('media', array(), true, false); // $shortCut = false
+```
+
 ### POST
 
 To POST and create a new resource, use the `post` method.
