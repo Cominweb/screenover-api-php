@@ -137,6 +137,10 @@ $response = $client->get('media', array(
 ));
 ```
 
+Legacy aliases are translated too: `id:xxx`, `category:xxx`, `Category.id:xxx`.
+If a legacy condition is not recognised, the SDK throws
+`Screenover\Api\Exception\UnsupportedFilterException` (fail loud, no silent pass-through).
+
 The response is the list of matching documents (array). For a single document, the
 document object is returned directly.
 
@@ -271,6 +275,7 @@ All failures throw exceptions:
 - `Screenover\Api\Exception\AuthException` — 401/403 / missing credentials
 - `Screenover\Api\Exception\NotFoundException` — 404
 - `Screenover\Api\Exception\ValidationException` — 400/422
+- `Screenover\Api\Exception\UnsupportedFilterException` — unsupported legacy `where` condition
 - `Screenover\Api\Exception\ApiException` — base class / transport errors
 
 ```php

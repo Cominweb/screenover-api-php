@@ -8,6 +8,7 @@ declare(strict_types=1);
  */
 
 use Screenover\Api\Query\OptionParser;
+use Screenover\Api\Exception\UnsupportedFilterException;
 
 section('OptionParser (Mediative query options translation)');
 
@@ -31,6 +32,47 @@ test('where: each comparison operator maps correctly', function () use ($p) {
 test('where: native PayloadCMS array is forwarded untouched', function () use ($p) {
     $built = urldecode($p->build(['where' => ['title' => ['equals' => 'x']]]));
     assertSame('where[title][equals]=x', $built);
+});
+
+test('where: id:xxx -> filter by id (equals)', function () use ($p) {
+    assertSame(
+        'where[and][0][id][equals]=abc-123',
+        urldecode($p->build(['where' => 'id:abc-123']))
+    );
+});
+
+test('where: category:xxx -> filter the category relation', function () use ($p) {
+    assertSame(
+        'where[and][0][categories.category][equals]=cat-1',
+        urldecode($p->build(['where' => 'category:cat-1']))
+    );
+});
+
+test('where: Category.id:xxx -> filter the category relation', function () use ($p) {
+    assertSame(
+        'where[and][0][categories.category][equals]=cat-1',
+        urldecode($p->build(['where' => 'Category.id:cat-1']))
+    );
+});
+
+test('where: combined id + category filters (";" -> and)', function () use ($p) {
+    assertSame(
+        'where[and][0][id][equals]=m1&where[and][1][categories.category][equals]=c1',
+        urldecode($p->build(['where' => 'id:m1;category:c1']))
+    );
+});
+
+test('where: regression - Media.id:xxx -> id (Model. prefix stripped)', function () use ($p) {
+    assertSame(
+        'where[and][0][id][equals]=42',
+        urldecode($p->build(['where' => 'Media.id:42']))
+    );
+});
+
+test('where: an unrecognised filter throws UnsupportedFilterException', function () use ($p) {
+    assertThrows(UnsupportedFilterException::class, function () use ($p) {
+        $p->build(['where' => 'foobar']);
+    });
 });
 
 test('order: created:DESC -> sort=-createdAt, asc default', function () use ($p) {

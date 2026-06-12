@@ -159,6 +159,14 @@ echo $media['id'];
 `where`, `order`, `fields`, `limit` keep the same syntax and are translated for you.
 You can additionally pass `locale` (`fr`/`en`).
 
+Legacy filter aliases are supported as well:
+
+- `id:xxx` -> filter by document id
+- `category:xxx` and `Category.id:xxx` -> filter medias by category relation
+
+If a legacy `where` condition cannot be translated, the SDK now throws an explicit
+`UnsupportedFilterException` instead of silently dropping the filter.
+
 ```php
 $client->get('media', [
     'where'     => 'title%%test;created<2014-11-12', // %% = like, ";" = AND
