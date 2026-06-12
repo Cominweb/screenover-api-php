@@ -137,6 +137,15 @@ $response = $client->get('media', array(
 ));
 ```
 
+Random ordering is also supported through the same option:
+
+```php
+$response = $client->get('media', array(
+    'order' => 'random', // translated by the SDK to sort=random
+));
+```
+
+`order=random` uses backend-native random sorting via Payload sort translation. It is not a client-side shuffle fallback.
 Legacy aliases are translated too: `id:xxx`, `category:xxx`, `Category.id:xxx`.
 If a legacy condition is not recognised, the SDK throws
 `Screenover\Api\Exception\UnsupportedFilterException` (fail loud, no silent pass-through).
