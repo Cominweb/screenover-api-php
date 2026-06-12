@@ -564,7 +564,7 @@ class ScreenoverApi
             return $options;
         }
 
-        $slug = strtok($resource, '/?');
+        $slug = strtok(ltrim($resource, '/'), '/?');
         if (!in_array($slug, self::PROJECT_SCOPED, true)) {
             return $options;
         }
