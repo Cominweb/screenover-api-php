@@ -46,10 +46,10 @@ class Uploader
         $this->api->getHttpClient()->putFile($signed['url'], $filePath, $contentType);
 
         // 3) Create the media document (source.type = upload).
-        $media = $this->api->post('media', array_merge([
-            'title' => $datas['title'] ?? $filename,
-            'source' => ['type' => 'upload'],
-        ], $datas));
+        $payload = $datas;
+        $payload['title'] = $datas['title'] ?? $filename;
+        $payload['source'] = ['type' => 'upload'];
+        $media = $this->api->post('media', $payload);
 
         $mediaId = $media['id'] ?? null;
         if ($mediaId === null) {
