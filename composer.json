@@ -1,0 +1,22 @@
+{
+  "name": "cominweb/screenover-api-php",
+  "description": "ScreenOver PHP API wrapper. Drop-in replacement for the legacy Mediative PHP SDK.",
+  "type": "library",
+  "license": "proprietary",
+  "authors": [
+    {
+      "name": "tMORINtech",
+      "email": "theo@morintech.fr"
+    }
+  ],
+  "require": {
+    "php": ">=8.0",
+    "ext-curl": "*",
+    "ext-json": "*"
+  },
+  "autoload": {
+    "psr-4": {
+      "Screenover\\Api\\": "src/"
+    }
+  }
+}
