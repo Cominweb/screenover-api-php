@@ -233,6 +233,46 @@ $storage = $client->call('GET', 'storage');           // disk usage for the proj
 $client->call('POST', 'reindex');                       // reindex the current project
 ```
 
+### Chyro integration
+
+When your project is connected to a Chyro broadcast management system via webhooks,
+ScreenOver automatically stores the Chyro identifiers inside each media document's
+`metadata` field (`chyroMediaId` and `chyroProgramId`).
+
+Two helpers let you look up a ScreenOver media using the Chyro ID you already have,
+without needing to know the internal storage details:
+
+```php
+// Find by Chyro media_id (from a Chyro "media" webhook event)
+$media = $client->findMediaByChyroId('CHY-42');
+
+// Find by Chyro program_id (from a Chyro "program" webhook event — available
+// even before the video file has been attached)
+$media = $client->findMediaByChyroProgramId('PROG-7');
+
+if ($media !== null) {
+    echo $media['id'];    // ScreenOver UUID
+    echo $media['title'];
+} else {
+    // No media found for that Chyro ID yet
+}
+```
+
+Both methods:
+- return the first matching media document as an associative array, or `null` if none is found;
+- respect the active project scope (call `setProject()` / `setCurrentProject()` first);
+- are equivalent to the following curl, which you can also use directly:
+
+```bash
+# By Chyro media ID
+curl "https://DOMAIN/api/media?where[metadata.chyroMediaId][equals]=CHY-42&limit=1" \
+     -H "Authorization: users API-Key YOUR_API_KEY"
+
+# By Chyro program ID
+curl "https://DOMAIN/api/media?where[metadata.chyroProgramId][equals]=PROG-7&limit=1" \
+     -H "Authorization: users API-Key YOUR_API_KEY"
+```
+
 Migrating from Mediative
 -------------------------
 

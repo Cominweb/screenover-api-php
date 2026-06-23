@@ -482,6 +482,64 @@ class ScreenoverApi
         return (new Uploader($this))->upload($filePath, $datas);
     }
 
+    // ---------------------------------------------------------------------
+    // Chyro integration helpers
+    // ---------------------------------------------------------------------
+
+    /**
+     * Find a ScreenOver media by its Chyro media ID (media_id from the Chyro webhook).
+     *
+     * Chyro sends a "media" webhook event that contains a `media_id` field. ScreenOver
+     * stores that value in `metadata.chyroMediaId` when it processes the webhook. This
+     * helper queries that JSON field so client code never has to know about the internal
+     * storage detail.
+     *
+     * Returns the matching media document, or null when none is found.
+     *
+     * Equivalent curl:
+     *   curl "https://DOMAIN/api/media?where[metadata.chyroMediaId][equals]=MEDIA_ID&limit=1" \
+     *        -H "Authorization: users API-Key YOUR_API_KEY"
+     *
+     * @return array<string,mixed>|null
+     */
+    public function findMediaByChyroId(string $chyroMediaId): ?array
+    {
+        $results = $this->get('media', [
+            'where' => ['metadata.chyroMediaId' => ['equals' => $chyroMediaId]],
+            'limit' => 1,
+        ]);
+
+        // get() returns a flat list when shortCut is true (default).
+        $docs = is_array($results) && isset($results[0]) ? $results : [];
+        return $docs[0] ?? null;
+    }
+
+    /**
+     * Find a ScreenOver media by its Chyro program ID (program_id from the Chyro webhook).
+     *
+     * Chyro sends a "program" webhook event whose `program_id` is stored in
+     * `metadata.chyroProgramId`. The program event is typically received before the
+     * "media" event, so this lookup works even when the file has not yet been attached.
+     *
+     * Returns the matching media document, or null when none is found.
+     *
+     * Equivalent curl:
+     *   curl "https://DOMAIN/api/media?where[metadata.chyroProgramId][equals]=PROG_ID&limit=1" \
+     *        -H "Authorization: users API-Key YOUR_API_KEY"
+     *
+     * @return array<string,mixed>|null
+     */
+    public function findMediaByChyroProgramId(string $chyroProgramId): ?array
+    {
+        $results = $this->get('media', [
+            'where' => ['metadata.chyroProgramId' => ['equals' => $chyroProgramId]],
+            'limit' => 1,
+        ]);
+
+        $docs = is_array($results) && isset($results[0]) ? $results : [];
+        return $docs[0] ?? null;
+    }
+
     /**
      * Reset the HTTP layer (kept for Mediative API compatibility).
      */
