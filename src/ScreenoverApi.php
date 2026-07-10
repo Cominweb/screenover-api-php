@@ -691,7 +691,7 @@ class ScreenoverApi
     {
         $publicFilter = ['visibility' => ['equals' => 'public']];
 
-        if (!array_key_exists('where', $options) || $options['where'] === '' || $options['where'] === []) {
+        if (!array_key_exists('where', $options) || $options['where'] === null || $options['where'] === '' || $options['where'] === []) {
             $options['where'] = $publicFilter;
             return $options;
         }
