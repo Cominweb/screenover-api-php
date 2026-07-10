@@ -73,7 +73,7 @@ test('getPublicCategories() merges native where array with visibility filter', f
     assertStringContains('where[and][1][visibility][equals]=public', $url);
 });
 
-test('getPublicCategories() returns the same list shape as getProjects()', function () {
+test('getPublicCategories() returns the same list shape as get()', function () {
     $api = new ScreenoverApi('id', 'KEY', 'demo.screenover.tv');
     $fake = FakeClient::into($api);
     $fake->enqueue(['docs' => [['id' => 'cat-1', 'title' => 'News']]]);
