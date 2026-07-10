@@ -240,7 +240,7 @@ class ScreenoverApi
         if (count($projects) > 1) {
             throw new ApiException(
                 'Several projects are available; pass a title to selectProject() '
-                . 'or call setCurrentProject($id) explicitly.'
+                    . 'or call setCurrentProject($id) explicitly.'
             );
         }
 
@@ -501,9 +501,13 @@ class ScreenoverApi
         $category = $this->get('category/' . $categoryId);
 
         if (is_array($category) && !empty($category['sourceCategory'])) {
-            return is_array($category['sourceCategory'])
-                ? (string) $category['sourceCategory']['id']
-                : (string) $category['sourceCategory'];
+            $source = $category['sourceCategory'];
+            if (is_array($source) && isset($source['id'])) {
+                return (string) $source['id'];
+            }
+            if (is_string($source) || is_int($source)) {
+                return (string) $source;
+            }
         }
 
         return (string) $category['id'];
@@ -520,7 +524,28 @@ class ScreenoverApi
      */
     public function getMediaByCategory(string $categoryId, array $options = [])
     {
-        $options['where'] = ['categories.category' => ['equals' => $categoryId]];
+        $categoryWhere = ['categories.category' => ['equals' => $categoryId]];
+        if (!array_key_exists('where', $options) || $options['where'] === null || $options['where'] === '' || $options['where'] === []) {
+            $options['where'] = $categoryWhere;
+        } elseif (is_string($options['where'])) {
+            // Legacy Mediative where syntax: append a resolved category filter.
+            $effective = $this->resolveEffectiveCategoryId($categoryId);
+            $options['where'] = rtrim($options['where'], ';') . ';category:' . $effective;
+        } elseif (is_array($options['where'])) {
+            // resolveCategoryFilter() only handles flat where; resolve here before merging.
+            $effective = $this->resolveEffectiveCategoryId($categoryId);
+            $resolvedWhere = ['categories.category' => ['equals' => $effective]];
+            $where = $options['where'];
+            if (isset($where['and']) && is_array($where['and'])) {
+                $where['and'][] = $resolvedWhere;
+            } else {
+                $where = ['and' => [$where, $resolvedWhere]];
+            }
+            $options['where'] = $where;
+        } else {
+            throw new ApiException('Invalid "where" option: expected string or array.', 400);
+        }
+
         return $this->get('media', $options);
     }
 
@@ -771,7 +796,14 @@ class ScreenoverApi
             return $options;
         }
 
-        if (!isset($options['where']['categories.category']['equals'])) {
+        if (!isset($options['where']) || !is_array($options['where'])) {
+            return $options;
+        }
+        if (
+            !isset($options['where']['categories.category'])
+            || !is_array($options['where']['categories.category'])
+            || !array_key_exists('equals', $options['where']['categories.category'])
+        ) {
             return $options;
         }
 
@@ -821,6 +853,6 @@ class ScreenoverApi
             'limit' => $response['limit'] ?? null,
             'hasNextPage' => $response['hasNextPage'] ?? null,
             'hasPrevPage' => $response['hasPrevPage'] ?? null,
-        ], static fn ($value): bool => $value !== null);
+        ], static fn($value): bool => $value !== null);
     }
 }

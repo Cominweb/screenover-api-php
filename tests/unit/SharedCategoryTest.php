@@ -96,6 +96,96 @@ test('getMediaByCategory returns an empty list when the source category has no m
     assertSame([], $results);
 });
 
+// ─── getMediaByCategory – string where ───────────────────────────────────────
+
+test('getMediaByCategory appends category filter to a legacy string where (normal category)', function () {
+    $api = new ScreenoverApi('id', 'KEY', 'demo.screenover.tv');
+    $fake = FakeClient::into($api);
+    $fake->enqueue(['doc' => ['id' => 'cat-s1']]);
+    $fake->enqueue(['docs' => [['id' => 'media-s1']]]);
+
+    $results = $api->getMediaByCategory('cat-s1', ['where' => 'title%%intro']);
+
+    assertSame([['id' => 'media-s1']], $results);
+    $url = urldecode($fake->lastCall()['url']);
+    assertStringContains('categories.category][equals]=cat-s1', $url);
+    assertStringContains('title][like]=intro', $url);
+    assertSame(2, count($fake->calls));
+});
+
+test('getMediaByCategory resolves mirror id in a legacy string where', function () {
+    $api = new ScreenoverApi('id', 'KEY', 'demo.screenover.tv');
+    $fake = FakeClient::into($api);
+    $fake->enqueue(['doc' => ['id' => 'mirror-s1', 'sourceCategory' => 'source-s1']]);
+    $fake->enqueue(['docs' => [['id' => 'media-s2']]]);
+
+    $results = $api->getMediaByCategory('mirror-s1', ['where' => 'title%%intro']);
+
+    assertSame([['id' => 'media-s2']], $results);
+    $url = urldecode($fake->lastCall()['url']);
+    assertStringContains('categories.category][equals]=source-s1', $url);
+    assertSame(2, count($fake->calls));
+});
+
+// ─── getMediaByCategory – array where merge ───────────────────────────────────
+
+test('getMediaByCategory merges a normal category into an existing array where using and', function () {
+    $api = new ScreenoverApi('id', 'KEY', 'demo.screenover.tv');
+    $fake = FakeClient::into($api);
+    $fake->enqueue(['doc' => ['id' => 'cat-a1']]);
+    $fake->enqueue(['docs' => [['id' => 'media-a1']]]);
+
+    $results = $api->getMediaByCategory('cat-a1', ['where' => ['title' => ['equals' => 'Intro']]]);
+
+    assertSame([['id' => 'media-a1']], $results);
+    $url = urldecode($fake->lastCall()['url']);
+    assertStringContains('categories.category', $url);
+    assertStringContains('cat-a1', $url);
+    assertSame(2, count($fake->calls));
+});
+
+test('getMediaByCategory resolves mirror id when merging into an existing array where', function () {
+    $api = new ScreenoverApi('id', 'KEY', 'demo.screenover.tv');
+    $fake = FakeClient::into($api);
+    $fake->enqueue(['doc' => ['id' => 'mirror-a1', 'sourceCategory' => 'source-a1']]);
+    $fake->enqueue(['docs' => [['id' => 'media-a2']]]);
+
+    $results = $api->getMediaByCategory('mirror-a1', ['where' => ['title' => ['equals' => 'Intro']]]);
+
+    assertSame([['id' => 'media-a2']], $results);
+    $url = urldecode($fake->lastCall()['url']);
+    assertStringContains('source-a1', $url);
+    assertSame(2, count($fake->calls));
+});
+
+test('getMediaByCategory appends to an existing and clause without wrapping it again', function () {
+    $api = new ScreenoverApi('id', 'KEY', 'demo.screenover.tv');
+    $fake = FakeClient::into($api);
+    $fake->enqueue(['doc' => ['id' => 'cat-a2']]);
+    $fake->enqueue(['docs' => [['id' => 'media-a3']]]);
+
+    $options = ['where' => ['and' => [['title' => ['equals' => 'Intro']]]]];
+    $api->getMediaByCategory('cat-a2', $options);
+
+    $url = urldecode($fake->lastCall()['url']);
+    // Both original filter and category filter present; no double-nested and.
+    assertStringContains('title', $url);
+    assertStringContains('cat-a2', $url);
+});
+
+// ─── getMediaByCategory – invalid where ──────────────────────────────────────
+
+test('getMediaByCategory throws ApiException on an invalid where type', function () {
+    $api = new ScreenoverApi('id', 'KEY', 'demo.screenover.tv');
+    FakeClient::into($api);
+
+    $e = assertThrows(
+        \Screenover\Api\Exception\ApiException::class,
+        fn () => $api->getMediaByCategory('cat-x', ['where' => 42])
+    );
+    assertSame(400, $e->getCode());
+});
+
 test('get(media) with categories.category filter auto-resolves a mirror id', function () {
     $api = new ScreenoverApi('id', 'KEY', 'demo.screenover.tv');
     $fake = FakeClient::into($api);
@@ -130,4 +220,27 @@ test('get(media) without a categories.category filter does not make an extra res
     $api->get('media', ['where' => ['title' => ['equals' => 'Intro']]]);
 
     assertSame(1, count($fake->calls), 'Only one HTTP call expected');
+});
+
+test('get(media) with a legacy string where does not throw a TypeError', function () {
+    $api = new ScreenoverApi('id', 'KEY', 'demo.screenover.tv');
+    $fake = FakeClient::into($api);
+    $fake->enqueue(['docs' => [['id' => 'media-8']]]);
+
+    $results = $api->get('media', ['where' => 'title%%test']);
+
+    assertSame([['id' => 'media-8']], $results);
+    assertSame(1, count($fake->calls), 'Only one HTTP call expected');
+});
+
+test('get(media) with categories.category as a scalar (non-array) is skipped safely', function () {
+    $api = new ScreenoverApi('id', 'KEY', 'demo.screenover.tv');
+    $fake = FakeClient::into($api);
+    $fake->enqueue(['docs' => [['id' => 'media-9']]]);
+
+    // Some callers may pass a flat scalar instead of ['equals' => ...]; no resolution attempt.
+    $results = $api->get('media', ['where' => ['categories.category' => 'cat-scalar']]);
+
+    assertSame([['id' => 'media-9']], $results);
+    assertSame(1, count($fake->calls), 'Only one HTTP call expected — no resolution for scalar value');
 });
