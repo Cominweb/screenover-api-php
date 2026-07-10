@@ -472,6 +472,20 @@ class ScreenoverApi
     }
 
     /**
+     * List only categories visible to the public.
+     *
+     * The helper enforces the visibility filter internally so callers do not need
+     * to repeat PayloadCMS-specific query details.
+     *
+     * @param array<string,mixed> $options
+     * @return array<string,mixed>|array<int,mixed>
+     */
+    public function getPublicCategories(array $options = [])
+    {
+        return $this->get('category', $this->mergePublicCategoryFilter($options));
+    }
+
+    /**
      * Upload a local file as a new media (handles the full GCS multi-step flow).
      *
      * @param array<string,mixed> $datas
@@ -663,6 +677,42 @@ class ScreenoverApi
         $options['_projectFilter'] = ['project' => ['equals' => $this->project]];
 
         return $options;
+    }
+
+    /**
+     * Force visibility=public while preserving caller-supplied filters.
+     *
+     * Supports both legacy string "where" conditions and native Payload where arrays.
+     *
+     * @param array<string,mixed> $options
+     * @return array<string,mixed>
+     */
+    private function mergePublicCategoryFilter(array $options): array
+    {
+        $publicFilter = ['visibility' => ['equals' => 'public']];
+
+        if (!array_key_exists('where', $options) || $options['where'] === '' || $options['where'] === []) {
+            $options['where'] = $publicFilter;
+            return $options;
+        }
+
+        if (is_string($options['where'])) {
+            $options['where'] .= ';visibility=public';
+            return $options;
+        }
+
+        if (is_array($options['where'])) {
+            $where = $options['where'];
+            if (isset($where['and']) && is_array($where['and'])) {
+                $where['and'][] = $publicFilter;
+            } else {
+                $where = ['and' => [$where, $publicFilter]];
+            }
+            $options['where'] = $where;
+            return $options;
+        }
+
+        throw new ApiException('Invalid "where" option: expected string or array.', 400);
     }
 
     /**

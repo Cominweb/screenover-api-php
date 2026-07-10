@@ -181,6 +181,17 @@ $client->get('media', [
 ]);
 ```
 
+For category lists intended for public navigation/UI, prefer the dedicated helper:
+
+```php
+$client->getPublicCategories([
+    'order' => 'created:DESC',
+    'limit' => '0,25',
+]);
+```
+
+It keeps project scoping and applies the public-visibility filter internally.
+
 Field & relation mapping
 ------------------------
 
@@ -393,6 +404,7 @@ Quick reference
 | update via `PUT` | `put()` (sent as `PATCH`) |
 | `domain` scoping | `setProject()` scoping |
 | single-step media add | `uploadMedia()` for files / `post()` for youtube/vimeo/dailymotion/hls |
+| manual category visibility filter | `getPublicCategories()` helper |
 | *(no pagination metadata)* | `getPagination()` / `getTotalDocs()` / `getTotalPages()` after each list |
 | *(silent unknown filter)* | throws `UnsupportedFilterException` |
 | original integer id | `importSourceKey` / `importSourceData` on every migrated document |

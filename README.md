@@ -169,6 +169,23 @@ If you need the full Payload response envelope in one call, disable shortcut mod
 $raw = $client->get('media', array(), true, false); // $shortCut = false
 ```
 
+To list only categories intended for public display, use the dedicated helper:
+
+```php
+$categories = $client->getPublicCategories();
+```
+
+You can still pass normal list options (`where`, `order`, `limit`, `fields`, `locale`);
+the SDK always enforces `visibility=public` and keeps normal project scoping:
+
+```php
+$categories = $client->getPublicCategories(array(
+    'where' => 'title%%news',
+    'order' => 'created:DESC',
+    'limit' => '0,25',
+));
+```
+
 ### POST
 
 To POST and create a new resource, use the `post` method.
