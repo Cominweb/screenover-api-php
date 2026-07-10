@@ -368,6 +368,7 @@ class ScreenoverApi
         $isSingleDocument = (bool) preg_match('#^/?\w[\w-]*/.+$#', $resource);
         if (is_array($options) && !$isSingleDocument) {
             $options = $this->injectProjectFilter($resource, $options, $allProjects);
+            $options = $this->resolveCategoryFilter($resource, $options);
         }
 
         $queryString = is_array($options) ? $this->optionParser->build($options) : '';
@@ -483,6 +484,44 @@ class ScreenoverApi
     public function getPublicCategories(array $options = [])
     {
         return $this->get('category', $this->mergePublicCategoryFilter($options));
+    }
+
+    /**
+     * Resolve the effective category ID, following sourceCategory for mirror categories.
+     *
+     * When a category is a shared mirror (it has a sourceCategory field), media
+     * records are linked to the source category, not the mirror. This method
+     * transparently returns the source ID so subsequent media queries return the
+     * correct results.
+     *
+     * @throws NotFoundException when the category does not exist
+     */
+    public function resolveEffectiveCategoryId(string $categoryId): string
+    {
+        $category = $this->get('category/' . $categoryId);
+
+        if (is_array($category) && !empty($category['sourceCategory'])) {
+            return is_array($category['sourceCategory'])
+                ? (string) $category['sourceCategory']['id']
+                : (string) $category['sourceCategory'];
+        }
+
+        return (string) $category['id'];
+    }
+
+    /**
+     * List the media that belong to a category, resolving mirror categories automatically.
+     *
+     * If the category is a shared mirror (sourceCategory), the filter is applied
+     * against the source ID so the media list is never empty due to the mirror contract.
+     *
+     * @param array<string,mixed> $options Additional get() options (limit, page, where…).
+     * @return array<string,mixed>|array<int,mixed>
+     */
+    public function getMediaByCategory(string $categoryId, array $options = [])
+    {
+        $options['where'] = ['categories.category' => ['equals' => $categoryId]];
+        return $this->get('media', $options);
     }
 
     /**
@@ -713,6 +752,32 @@ class ScreenoverApi
         }
 
         throw new ApiException('Invalid "where" option: expected string or array.', 400);
+    }
+
+    /**
+     * Resolve a categories.category equals filter for media list queries.
+     *
+     * When the where array contains a flat `categories.category.equals` value,
+     * the category is fetched and the ID is replaced with its source if it is a
+     * shared mirror. This makes every media list query mirror-safe automatically.
+     *
+     * @param array<string,mixed> $options
+     * @return array<string,mixed>
+     */
+    private function resolveCategoryFilter(string $resource, array $options): array
+    {
+        $slug = strtok(ltrim($resource, '/'), '/?');
+        if ($slug !== 'media') {
+            return $options;
+        }
+
+        if (!isset($options['where']['categories.category']['equals'])) {
+            return $options;
+        }
+
+        $categoryId = (string) $options['where']['categories.category']['equals'];
+        $options['where']['categories.category']['equals'] = $this->resolveEffectiveCategoryId($categoryId);
+        return $options;
     }
 
     /**
